@@ -59,6 +59,8 @@ void auto_motor_stop(void);
 void SysTick_Init(void);
 void SystemClock_Config(void);
 void adc_init(void);
+int CURRENT(void);
+void anti_pinch(void);
 uint16_t ADC_READ(void);
 void delay_ms(int);
 
@@ -88,6 +90,7 @@ int main(void)
   /* USER CODE BEGIN Init */
 auto_window_gpio();
 SysTick_Init();
+adc_init();
 //SystemClock_Config();
   /* USER CODE END Init */
 
@@ -186,7 +189,7 @@ void auto_up_down(void)
 	 {
 		 SysTick_Delay(1);
 		 press_time1++;
-		 if(press_time1>1000)
+		 if(press_time1>500)
 		 {
 			 if((GPIOB->IDR>>7&1)==1)
 			 {
@@ -197,7 +200,7 @@ void auto_up_down(void)
 				 k=22;
 			 auto_motor_down();
 			 }
-			 while(!(GPIOB->IDR>>4&1))
+			 while(!(GPIOB->IDR>>7&1))
 			 {
 				 press_time4=0;
 				 l:if((GPIOB->IDR>>2&1)==1)
@@ -211,7 +214,7 @@ void auto_up_down(void)
 					 {
 						 SysTick_Delay(1);
 						 press_time4++;
-						 if(press_time4>500)
+						 if(press_time4>10)
 						 {
 							 auto_motor_stop();
 							 while(GPIOB->IDR>>2&1);
@@ -223,6 +226,7 @@ void auto_up_down(void)
 			 }
 			 auto_motor_stop();
 			 while((GPIOB->IDR>>1&1));
+			 press_time1=0;
 		 }
 	 }
 	}
@@ -243,7 +247,7 @@ void auto_up_down(void)
 		 {
 			 SysTick_Delay(1);
 			 press_time2++;
-			 if(press_time2>1000)
+			 if(press_time2>500)
 			 {
 				 if((GPIOB->IDR>>4&1)==1)
 				 {
@@ -251,9 +255,10 @@ void auto_up_down(void)
 				 }
 				 else
 				 {
+					 k=4;
 				 auto_motor_up();
 				 }
-				 while(!(GPIOB->IDR>>7&1))
+				 while((!(GPIOB->IDR>>4&1))&&(CURRENT()))
 				 {
 					 press_time3=0;
 					 l1:if((GPIOB->IDR>>1&1)==1)
@@ -267,7 +272,7 @@ void auto_up_down(void)
 						 {
 							 SysTick_Delay(1);
 							 press_time3++;
-							 if(press_time3>500)
+							 if(press_time3>10)
 							 {
 								 auto_motor_stop();
 								 while(GPIOB->IDR>>1&1);
@@ -288,6 +293,16 @@ void auto_up_down(void)
 
 
 }
+/************************************ANTI-PINCH*********************************/
+void anti_pinch(void)
+{
+auto_motor_stop();
+delay_ms(1);
+auto_motor_down();
+delay_ms(50);
+auto_motor_stop();
+while(GPIOB->IDR>>2 &1);
+}
 /*-------------------------------------------------------------------------------------*/
 void auto_motor_up(void)
 {
@@ -306,6 +321,7 @@ void auto_motor_down(void)
 void auto_motor_stop(void)
 {
 	GPIOB->ODR|=(1<<5)|(1<<6);//BOTH RELAY OFF
+	cnt=0;adc_cur=0;
 }
 /*--------------------------------------------------------------------------------------*/
 void SysTick_Init(void)
@@ -328,8 +344,8 @@ void adc_init(void)
 {
 
 	RCC->APB2ENR|=(1<<9);
-	RCC->AHBENR|=(1<<17);
-	GPIOA->MODER|=0X3;
+	RCC->AHBENR|=(1<<18);
+	GPIOB->MODER|=0X3;
 	ADC1->CR |= 1<<31; /* (4) */
 	while ((ADC1->CR>>31 & 1) != 0);
 	//ADC1->SMPR |= 1<<0|1<<1|1<<0;
@@ -337,7 +353,7 @@ void adc_init(void)
 	ADC1->CFGR1&=(~(1<<0));//SCAN CHNL FROM 0 TO 18
 	ADC1->CFGR1|=(1<<13);
 	ADC1->CR|=(1<<0);
-	ADC1->CHSELR|=(1<<9);
+	ADC1->CHSELR|=(1<<8);
 	while(!(ADC1->ISR>>0 &1));
 }
 /*****************************ADC READ ****************************************/
@@ -372,6 +388,7 @@ int CURRENT(void)
      if(adc_cur>THRESHOLD_CURRENT)
      {
   	   anti_pinch();
+  	   return 0;
      }
   return 1;
 }
